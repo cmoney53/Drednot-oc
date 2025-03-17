@@ -1,0 +1,234 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drednot OC</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            position: relative;
+        }
+        #auth-container, #join-request-container {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            flex-direction: column;
+            align-items: center;
+        }
+        #messages {
+            list-style-type: none;
+            padding: 10px;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        #form {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+        }
+        #input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+        }
+        #submit {
+            padding: 10px 15px;
+            background-color: black;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #room-buttons button {
+            margin-right: 5px;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        #login-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            background-color: blue;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+        }
+        .message-box {
+            background-color: #f1f1f1;
+            padding: 10px;
+            border-radius: 10px;
+            margin: 5px 0;
+            max-width: 80%;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="login-button">Login / Sign Up</button>
+
+    <h1>Drednot OC</h1>
+
+    <div id="auth-container">
+        <h2 id="auth-title">Login</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Password">
+        <button id="auth-button">Login</button>
+        <p id="toggle-auth">Don't have an account? <a href="#">Register</a></p>
+    </div>
+
+    <div id="room-buttons">
+        <button id="public-button" data-room="Public" class="active">Public</button>
+        <button id="crown-button" data-room="Crown">Crown</button>
+        <button id="plexiden-button" data-room="Plexiden">Plexiden</button>
+    </div>
+
+    <ul id="messages"></ul>
+
+    <form id="form">
+        <input id="input" autocomplete="off" placeholder="Type a message..." />
+        <button id="submit">Send</button>
+    </form>
+
+    <div id="join-request-container">
+        <p id="join-request-text"></p>
+        <button id="approve-button">Approve</button>
+        <button id="deny-button">Deny</button>
+    </div>
+
+    <script>
+        const socket = io();
+        const form = document.getElementById('form');
+        const input = document.getElementById('input');
+        const messages = document.getElementById('messages');
+        const publicButton = document.getElementById('public-button');
+        const crownButton = document.getElementById('crown-button');
+        const plexidenButton = document.getElementById('plexiden-button');
+        const authContainer = document.getElementById('auth-container');
+        const authTitle = document.getElementById('auth-title');
+        const usernameInput = document.getElementById('username');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const authButton = document.getElementById('auth-button');
+        const toggleAuth = document.getElementById('toggle-auth');
+        const joinRequestContainer = document.getElementById('join-request-container');
+        const joinRequestText = document.getElementById('join-request-text');
+        const approveButton = document.getElementById('approve-button');
+        const denyButton = document.getElementById('deny-button');
+        const loginButton = document.getElementById('login-button');
+
+        let username = "";
+        let currentRoom = "Public";
+        let isAdmin = false;
+
+        loginButton.addEventListener("click", () => {
+            authContainer.style.display = "flex";
+        });
+
+        authButton.addEventListener("click", () => {
+            username = usernameInput.value || "Guest";
+            authContainer.style.display = "none";
+            isAdmin = username === "cmoney23";
+            localStorage.setItem("username", username);
+        });
+
+        toggleAuth.addEventListener("click", () => {
+            if (authTitle.textContent === "Login") {
+                authTitle.textContent = "Register";
+                authButton.textContent = "Register";
+                toggleAuth.innerHTML = `Already have an account? <a href="#">Login</a>`;
+            } else {
+                authTitle.textContent = "Login";
+                authButton.textContent = "Login";
+                toggleAuth.innerHTML = `Don't have an account? <a href="#">Register</a>`;
+            }
+        });
+
+        if (localStorage.getItem("username")) {
+            username = localStorage.getItem("username");
+            isAdmin = username === "cmoney23";
+        }
+
+        socket.on("chat message", (data) => {
+            const li = document.createElement("li");
+            li.classList.add("message-box");
+            li.textContent = `${data.username}: ${data.message}`;
+            messages.appendChild(li);
+        });
+
+        function requestJoin(room) {
+            socket.emit("join request", { username, room });
+            alert(`Request sent to join ${room}. Waiting for approval.`);
+        }
+
+        publicButton.addEventListener("click", () => {
+            currentRoom = "Public";
+        });
+
+        crownButton.addEventListener("click", () => requestJoin("Crown"));
+        plexidenButton.addEventListener("click", () => requestJoin("Plexiden"));
+
+        form.addEventListener("submit", (e) => {
+            e.preventDefault();
+            if (input.value) {
+                socket.emit("chat message", { username, message: input.value, room: currentRoom });
+                input.value = "";
+            }
+        });
+
+        socket.on("chat cleared", (data) => {
+            if (data.room === currentRoom) {
+                messages.innerHTML = "";
+            }
+        });
+
+        socket.on('join request', ({ username, room, socketId }) => {
+            if (isAdmin) {
+                joinRequestText.textContent = `${username} wants to join ${room}.`;
+                joinRequestContainer.style.display = 'flex';
+
+                approveButton.onclick = () => {
+                    socket.emit('approve join', { username, room, socketId });
+                    joinRequestContainer.style.display = 'none';
+                };
+
+                denyButton.onclick = () => {
+                    socket.emit('deny join', { username, room, socketId });
+                    joinRequestContainer.style.display = 'none';
+                };
+            }
+        });
+
+        socket.on('join approved', ({ room }) => {
+            alert(`Your request to join ${room} was approved.`);
+        });
+
+        socket.on('join denied', ({ room }) => {
+            alert(`Your request to join ${room} was denied.`);
+            }
+        });
+
+    </script>
+
+</body>
+</html>
